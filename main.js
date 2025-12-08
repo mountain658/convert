@@ -1,9 +1,13 @@
 import handler_ImageMagick from "./handlers/ImageMagick.js";
 import handler_FFmpeg from "./handlers/FFmpeg.js";
+import handler_canvg from "./handlers/canvg.js";
+import handler_img2svg from "./handlers/img2svg.js";
 
 const handlers = [
   handler_ImageMagick,
-  handler_FFmpeg
+  handler_FFmpeg,
+  handler_canvg,
+  handler_img2svg
 ];
 
 let selectedFile;
