@@ -19,6 +19,7 @@ let selectedFile;
 const fileInput = document.querySelector("#file-input");
 const fileSelectArea = document.querySelector("#file-area");
 const convertButton = document.querySelector("#convert-button");
+const modeToggleButton = document.querySelector("#mode-button");
 
 const inputList = document.querySelector("#from-list");
 const outputList = document.querySelector("#to-list");
@@ -96,28 +97,51 @@ function hidePopup () {
   popupBackground.style.display = "none";
 }
 
-const initPromises = [];
-for (const handler of handlers) {
-  initPromises.push(handler.init());
-}
+window.simpleMode = true;
 
 const allOptions = [];
 // Expose globally for debugging
 window.allSupportedFormats = allOptions;
 
-Promise.all(initPromises).then(() => {
+function buildOptionList () {
+
+  allOptions.length = 0;
+  inputList.innerHTML = "";
+  outputList.innerHTML = "";
 
   for (const handler of handlers) {
     for (const format of handler.supportedFormats) {
 
       if (!format.mime) continue;
 
+      // In simple mode, display each input/output MIME type only once
+      let displayOption = true;
+
+      if (simpleMode) {
+        const duplicateMimeTypes = allOptions.filter(c => c.format.mime === format.mime);
+        displayOption = (format.to && !duplicateMimeTypes.some(c => c.format.to)) ||
+          (format.from && !duplicateMimeTypes.some(c => c.format.from));
+      }
+
       allOptions.push({ format, handler });
+
+      if (!displayOption) continue;
 
       const newOption = document.createElement("button");
       newOption.setAttribute("format-index", allOptions.length - 1);
       newOption.setAttribute("mime-type", format.mime);
-      newOption.appendChild(document.createTextNode(format.name + ` (${format.mime}) ${handler.name}`));
+
+      if (simpleMode) {
+        // Hide any handler-specific information in simple mode
+        const cleanName = format.name
+          .split("(").join(")").split(")")
+          .filter((c, i) => i % 2 === 0)
+          .filter(c => c != "")
+          .join(" ");
+        newOption.appendChild(document.createTextNode(cleanName + ` (${format.mime})`));
+      } else {
+        newOption.appendChild(document.createTextNode(format.name + ` (${format.mime}) ${handler.name}`));
+      }
 
       const clickHandler = (event) => {
         const previous = event.target.parentElement.getElementsByClassName("selected")?.[0];
@@ -150,6 +174,22 @@ Promise.all(initPromises).then(() => {
 
   hidePopup();
 
+}
+
+const initPromises = [];
+for (const handler of handlers) {
+  initPromises.push(handler.init());
+}
+Promise.all(initPromises).then(buildOptionList);
+
+modeToggleButton.addEventListener("click", () => {
+  simpleMode = !simpleMode;
+  if (simpleMode) {
+    modeToggleButton.textContent = "Advanced mode";
+  } else {
+    modeToggleButton.textContent = "Simple mode";
+  }
+  buildOptionList();
 });
 
 async function attemptConvertPath (file, path) {
@@ -163,8 +203,8 @@ async function attemptConvertPath (file, path) {
       if (!file.bytes.length) throw "Output is empty.";
       file.name = file.name.split(".")[0] + "." + path[i + 1].format.extension;
     } catch (e) {
-      // console.log(path.map(c => c.format.format));
-      // console.error(path[i + 1].handler.name, `${path[i].format.format} -> ${path[i + 1].format.format}`, e);
+      console.log(path.map(c => c.format.format));
+      console.error(path[i + 1].handler.name, `${path[i].format.format} -> ${path[i + 1].format.format}`, e);
       return null;
     }
   }
@@ -181,20 +221,31 @@ async function buildConvertPath (file, target, queue) {
 
     const previous = path[path.length - 1];
 
-    // Check if the target supports parsing *from* the previous node's format
-    if (target.handler.supportedFormats.some(c => c.mime === previous.format.mime && c.from)) {
-      const attempt = await attemptConvertPath(file, path.concat(target));
-      if (attempt) return attempt;
-    }
-
-    // Get handlers that support *taking in* the previous format
-    // Note that this will of course exclude the target handler
+    // Get handlers that support *taking in* the previous node's format
     const validHandlers = handlers.filter(handler => (
       handler.supportedFormats.some(format => (
         format.mime === previous.format.mime &&
         format.from
       ))
     ));
+
+    if (simpleMode) {
+      // Check for *any* supported handler that outputs the target format
+      const match = allOptions.find(opt =>
+        validHandlers.includes(opt.handler) &&
+        opt.format.mime === target.format.mime && opt.format.to
+      );
+      if (match) {
+        const attempt = await attemptConvertPath(file, path.concat(match));
+        if (attempt) return attempt;
+      }
+    } else {
+      // Check if the target handler is supported by the previous node
+      if (validHandlers.includes(target.handler)) {
+        const attempt = await attemptConvertPath(file, path.concat(target));
+        if (attempt) return attempt;
+      }
+    }
 
     // Look for untested mime types among valid handlers and add to queue
     for (const handler of validHandlers) {
