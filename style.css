@@ -137,6 +137,11 @@ button.selected {
   pointer-events: none;
 }
 
+#convert-button:disabled {
+  filter: grayscale(1);
+  cursor: not-allowed;
+}
+
 #popup-bg {
   position: fixed;
   left: 0;

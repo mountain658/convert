@@ -32,6 +32,11 @@ const ui = {
   popupBackground: document.querySelector("#popup-bg") as HTMLDivElement
 };
 
+const setConvertEnabled = (enabled: boolean) => {
+  ui.convertButton.disabled = !enabled;
+  ui.convertButton.className = enabled ? "" : "disabled";
+};
+
 /**
  * Filters a list of butttons to exclude those not matching a substring.
  * @param list Button list (div) to filter.
@@ -193,6 +198,7 @@ async function buildOptionList () {
   allOptions.length = 0;
   ui.inputList.innerHTML = "";
   ui.outputList.innerHTML = "";
+  setConvertEnabled(false);
 
   for (const handler of handlers) {
     if (!window.supportedFormatCache.has(handler.name)) {
@@ -254,11 +260,7 @@ async function buildOptionList () {
         if (previous) previous.className = "";
         event.target.className = "selected";
         const allSelected = document.getElementsByClassName("selected");
-        if (allSelected.length === 2) {
-          ui.convertButton.className = "";
-        } else {
-          ui.convertButton.className = "disabled";
-        }
+        setConvertEnabled(allSelected.length === 2);
       };
 
       if (format.from && addToInputs) {
